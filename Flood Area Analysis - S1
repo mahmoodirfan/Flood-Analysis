@@ -1,0 +1,79 @@
+// Flood Area Analysis Using Sentinel-1 Data
+// This script calculates and visualizes flooded areas using satellite data
+
+// Importing a generic shapefile for the area of interest
+// Update the path to point to your shapefile location
+var localShp = ee.FeatureCollection('users/your_username/your_shapefile'); 
+
+// Extracting the specific region's boundary from the shapefile
+// Replace 'Region_Name' with the actual name of the region you are studying
+var targetRegion = localShp.filter(ee.Filter.eq('NAME_FIELD', 'Region_Name'));
+
+// Analyzing Sentinel-1 data for August 2022
+var sentinel1Aug22 = ee.ImageCollection('COPERNICUS/S1_GRD')
+    .filterBounds(targetRegion)
+    .filterDate('2022-08-01', '2022-08-31')
+    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+    .filter(ee.Filter.eq('instrumentMode', 'IW'));
+
+var mosaicAug22 = sentinel1Aug22.min(); // Creating a mosaic of the minimum VV polarization values
+var visParams = {min: -25, max: 0, bands: ['VV']}; // Visualization parameters for VV polarization
+
+var clippedAug22 = mosaicAug22.clip(targetRegion); // Clipping the mosaic to the target region
+Map.addLayer(clippedAug22, visParams, 'Clipped Image 2022');
+
+// Creating a water mask using a threshold value for water detection
+var waterMaskAug22 = clippedAug22.select('VV').lt(-18.5).rename('Water_Mask_Aug22'); 
+Map.addLayer(waterMaskAug22, {palette: ['white', 'blue']}, 'Water Mask Aug 2022');
+
+// Calculating the flooded area for August 2022
+var areaImageAug22 = waterMaskAug22.multiply(ee.Image.pixelArea());
+var areaAug22 = areaImageAug22.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: targetRegion.geometry(),
+  scale: 10,
+  maxPixels: 1e10
+});
+var floodedAreaSqKmAug22 = ee.Number(areaAug22.get('Water_Mask_Aug22')).divide(1e6).round();
+print('Flooded Area Aug 2022 (sq km):', floodedAreaSqKmAug22);
+
+// Repeating the process for August 2023
+// Replace dates for analyzing different periods
+var sentinel1Aug23 = ee.ImageCollection('COPERNICUS/S1_GRD')
+    .filterBounds(targetRegion)
+    .filterDate('2023-08-01', '2023-08-31')
+    .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+    .filter(ee.Filter.eq('instrumentMode', 'IW'));
+
+var mosaicAug23 = sentinel1Aug23.min(); // Mosaic for August 2023
+
+var clippedAug23 = mosaicAug23.clip(targetRegion); // Clipping image to the target region
+Map.addLayer(clippedAug23, visParams, 'Clipped Image 2023');
+
+var waterMaskAug23 = clippedAug23.select('VV').lt(-18.5).rename('Water_Mask_Aug');
+Map.addLayer(waterMaskAug23, {palette: ['white', 'blue']}, 'Water Mask Aug 2023');
+
+var areaImageAug23 = waterMaskAug23.multiply(ee.Image.pixelArea());
+var areaAug23 = areaImageAug23.reduceRegion({
+  reducer: ee.Reducer.sum(),
+  geometry: targetRegion.geometry(),
+  scale: 10,
+  maxPixels: 1e10
+});
+
+var floodedAreaSqKmAug23 = ee.Number(areaAug23.get('Water_Mask_Aug')).divide(1e6).round();
+print('Flooded Area August 2023 (sq km):', floodedAreaSqKmAug23);
+
+// Optional Export to Google Drive
+// Uncomment to enable export functionality
+/*
+Export.image.toDrive({
+  image: waterMaskAug23,
+  description: 'August2023_FloodedArea',
+  folder: 'FloodAnalysis',
+  fileNamePrefix: 'FloodedArea_Aug2023',
+  region: targetRegion,
+  scale: 10,
+  maxPixels: 1e9
+});
+*/
